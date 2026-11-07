@@ -1,0 +1,5 @@
+# 股票投资尽调研究框架：7 个技能快照（8 阶段方法论 + 引用验证 + GoT 控制器）。
+# 浏览器半边由 dsh.client 声明加载。
+- insert:
+    - id: stock-research
+      name: 'dsh-stock-research'
