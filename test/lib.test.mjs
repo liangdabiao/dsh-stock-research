@@ -87,3 +87,54 @@ test('LICENSE 存在且为 MIT', () => {
   const license = readFileSync(join(ROOT, 'LICENSE'), 'utf8')
   assert.match(license, /MIT/)
 })
+
+// ── 升级新增：modules + checklist ──────────────────────────
+process.env.DSH_HOME = new URL('../.tmp/test-home/', import.meta.url).pathname.replace(/^\/([A-Za-z]):/, '$1:')
+
+const { listModules, getModule, searchModules } = await import('../lib/modules.js')
+const data = await import('../lib/data.js')
+const host = await import('../src/host.js')
+
+test('modules: 7 个技能 list/search/get', async () => {
+  assert.equal(listModules(SKILL_DIRS).length, 7)
+  assert.ok(searchModules(SKILL_DIRS, 'citation').length >= 1)
+  assert.ok(getModule(SKILL_DIRS, 'synthesizer').body.length > 200)
+  assert.equal(getModule(SKILL_DIRS, 'no-such'), null)
+})
+
+test('data: 尽调清单 init/冲突/更新/清空', () => {
+  data.clearDD()
+  const dd = data.initDD('600519', '长期持有价值', undefined, false)
+  assert.equal(dd.items.length, 8) // 默认骨架
+  const conflict = data.initDD('AAPL', '', undefined, false)
+  assert.equal(conflict.conflict, true)
+  const item = data.updateItem(3, { status: 'done', note: '行业格局清晰' })
+  assert.equal(item.status, 'done')
+  const extra = data.updateItem(99, { title: '附加事项' })
+  assert.equal(extra.title, '附加事项')
+  data.clearDD()
+  assert.equal(data.getDD().items.length, 0)
+})
+
+test('host: 2 个工具 schema + checklist 全链路 + module list', async () => {
+  for (const tool of [host.stockChecklistTool, host.stockModuleTool]) {
+    assert.equal(tool.parameters.additionalProperties, false)
+    assert.ok(tool.description.length > 30)
+  }
+  await assert.rejects(() => host.stockChecklistTool.execute({ action: 'list', bogus: 1 }), /未知参数/)
+  const init = await host.stockChecklistTool.execute({ action: 'init', ticker: 'AAPL', question: '是否高估' })
+  assert.equal(init.ok, true)
+  assert.ok(init.data.includes('8 项') || init.data.includes('[todo]'))
+  const st = await host.stockChecklistTool.execute({ action: 'status', index: 1, status: 'done', note: '底座完成' })
+  assert.ok(st.summary.includes('done'))
+  const list = await host.stockChecklistTool.execute({ action: 'list' })
+  assert.ok(list.summary.includes('1/8'))
+  host.apply(
+    { effect: (fn) => { try { fn() } catch {} }, tools: { register: () => {} }, skills: { registerProvider: () => {} }, systemPrompt: { section: () => {} }, webServer: { register: () => {} } },
+    { injectRules: false })
+  const mods = await host.stockModuleTool.execute({ action: 'list' })
+  assert.equal(mods.ok, true)
+  assert.ok(mods.data.includes('synthesizer') || mods.data.includes('research'))
+  const noConfirm = await host.stockChecklistTool.execute({ action: 'clear' })
+  assert.equal(noConfirm.ok, false)
+})

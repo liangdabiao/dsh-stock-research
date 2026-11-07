@@ -46,6 +46,44 @@ function GuideTab() {
       h('div', { style: styles.muted }, '本框架输出研究分析，不构成投资建议。所有投资存在风险。投资决策前请自行尽职调查并咨询合格财务顾问。')))
 }
 
+
+// ---------- 尽调清单 ----------
+const STATUS_STYLE = {
+  todo: ['#8a8a92', '○ 待做'],
+  doing: ['#b58a00', '◐ 进行中'],
+  done: ['#1a7f37', '✓ 完成'],
+}
+
+function ChecklistTab() {
+  const [dd, setDD] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    fetchJson('/api/dd').then((d) => setDD(d.dd)).catch((e) => setError(e.message))
+  }, [])
+  if (error) return h('div', { style: styles.error }, error)
+  if (dd === null) return h('div', { style: styles.muted }, '加载中…')
+  if (!dd.items.length) {
+    return h('div', { style: styles.muted },
+      '还没有尽调清单。在对话里说「深度调研 600519」，模型会 init 8 项标准尽调骨架并逐项推进。')
+  }
+  const done = dd.items.filter((it) => it.status === 'done').length
+  const pct = Math.round((done / dd.items.length) * 100)
+  return h('div', null,
+    h('div', { style: styles.card },
+      h('div', { style: styles.sectionTitle }, '📋 ' + (dd.ticker || '未命名') + ' 尽调'),
+      dd.question ? h('div', { style: styles.muted }, dd.question) : null,
+      h('div', { style: styles.mutedSmall }, done + '/' + dd.items.length + ' 完成（' + pct + '%）'),
+      h('div', { style: styles.barWrap }, h('div', { style: { ...styles.bar, width: pct + '%' } }))),
+    h('div', { style: styles.card },
+      dd.items.map((it) => {
+        const [color, label] = STATUS_STYLE[it.status] || STATUS_STYLE.todo
+        return h('div', { key: it.index, style: styles.item },
+          h('span', { style: { color, fontSize: 12, fontWeight: 700, minWidth: 66 } }, label),
+          h('span', { style: styles.itemTitle }, it.index + '. ' + it.title),
+          it.note ? h('div', { style: styles.mutedSmall }, it.note) : null)
+      })))
+}
+
 // ---------- 技能目录 ----------
 function SkillsTab() {
   const [skills, setSkills] = useState(null)
@@ -62,12 +100,13 @@ function SkillsTab() {
 }
 
 function Panel() {
-  const [tab, setTab] = useState('guide')
+  const [tab, setTab] = useState('checklist')
   return h('div', { style: styles.wrap },
     h('div', { style: styles.row },
+      h('button', { style: tab === 'checklist' ? styles.tabActive : styles.tab, onClick: () => setTab('checklist') }, '📋 尽调清单'),
       h('button', { style: tab === 'guide' ? styles.tabActive : styles.tab, onClick: () => setTab('guide') }, '📖 使用指南'),
-      h('button', { style: tab === 'skills' ? styles.tabActive : styles.tab, onClick: () => setTab('skills') }, '📋 技能目录')),
-    tab === 'guide' ? h(GuideTab) : h(SkillsTab))
+      h('button', { style: tab === 'skills' ? styles.tabActive : styles.tab, onClick: () => setTab('skills') }, '🧩 方法技能')),
+    tab === 'checklist' ? h(ChecklistTab) : tab === 'guide' ? h(GuideTab) : h(SkillsTab))
 }
 
 const styles = {
@@ -84,6 +123,11 @@ const styles = {
   error: { color: '#c0392b' },
   skillName: { fontWeight: 700, color: '#0e4d34' },
   skillDesc: { marginTop: 4, color: '#4a4a50', lineHeight: 1.5 },
+  mutedSmall: { color: '#a0a0a8', fontSize: 12, lineHeight: 1.7 },
+  barWrap: { background: '#eee', borderRadius: 999, height: 8, marginTop: 8, overflow: 'hidden' },
+  bar: { background: '#1a6f4b', height: '100%', borderRadius: 999, transition: 'width .3s' },
+  item: { padding: '6px 0', borderBottom: '1px solid #f0f0f2' },
+  itemTitle: { fontSize: 12.5 },
 }
 
 function apply(ctx) {

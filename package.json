@@ -1,7 +1,7 @@
 {
   "name": "dsh-stock-research",
-  "version": "0.1.0",
-  "description": "股票投资尽调研究框架：8 阶段方法论、28 个并行研究智能体策略、多空平衡分析、DCF/反向 DCF 估值、引用验证。纯技能零 API key。",
+  "version": "0.2.0",
+  "description": "股票投资尽调工作台：7 个尽调方法技能 + stock_checklist 尽调清单持久化（8 项标准骨架）+ stock_module 技能查询。侧栏尽调进度面板。",
   "license": "MIT",
   "type": "module",
   "main": "src/host.js",
