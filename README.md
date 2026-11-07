@@ -39,6 +39,13 @@ npm install && npm test && npm run selftest && npm run build
 - `npm test`：8 个单测（快照合规/8 阶段方法论/引用军规/dsh 环境映射/面板鉴权/许可）
 - `npm run selftest`：7 技能注册 + addendum 三要素 + systemPrompt + 许可，零网络
 
+
+## 安装
+
+```bash
+dsh plugin --profile web add dsh-stock-research
+```
+
 ## 许可
 
 MIT（liangdabiao）
