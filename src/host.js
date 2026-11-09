@@ -7,7 +7,11 @@ import { createSkillProvider } from '../lib/skills.js'
 import { systemSection } from './systemPrompt.js'
 import { registerApi } from '../lib/api.js'
 import { listModules, getModule, searchModules } from '../lib/modules.js'
-import { getDD, initDD, updateItem, clearDD, DEFAULT_CHECKLIST, STATUSES } from '../lib/data.js'
+import {
+  listDossiers, getDossier, initChecklist, updateItem, clearChecklist,
+  getLastTicker, archiveReport, removeReport, snapshotDiff,
+  DEFAULT_CHECKLIST, STATUSES, RATINGS,
+} from '../lib/data.js'
 
 export const name = 'stock-research' // = cordis.patch.yml 的 id
 
@@ -59,16 +63,16 @@ const result = (ok, summary, data = '') => ({ ok, summary, data })
 export const stockChecklistTool = {
   name: 'stock_checklist',
   description:
-    '管理一只股票的尽职调查清单进度（持久化）：init 建清单（默认 8 项标准尽调骨架，可自定义）、' +
-    'status 更新事项进度（todo/doing/done + 结论备注）、list 看整体进度。' +
-    '用户要求深度研究一只股票时先 init 清单，每完成一个环节用 status 记录，用户可在侧栏「股票尽调」面板看进度。',
+    '管理股票尽职调查清单进度（持久化，**每只股票一个档案，互不覆盖**）：init 建清单（默认 8 项标准尽调骨架，可自定义）、' +
+    'status 更新事项进度（todo/doing/done + 结论备注）、list 看单只或全部标的进度、clear 清空。' +
+    '用户要求深度研究一只股票时先 init，每完成一个环节用 status 记录；多只股票可并行研究，用户在侧栏「投资尽调」里切换。',
   parameters: {
     type: 'object',
     additionalProperties: false,
     required: ['action'],
     properties: {
       action: str('init 建清单；status 更新事项；list 看进度；clear 清空', { enum: ['init', 'status', 'list', 'clear'] }),
-      ticker: str('init：股票代码/名称（如 AAPL、贵州茅台）'),
+      ticker: str('股票代码/名称（如 00700.HK、AAPL、贵州茅台）。status/clear/list 省略时用最近操作的那只'),
       question: str('init：研究问题/投资视角（如「高估值下是否值得长期持有」）'),
       items: str('init：可选，自定义清单（竖线分隔）。缺省用 8 项标准尽调骨架'),
       index: num('status：事项序号（从 1 开始）'),
@@ -80,35 +84,126 @@ export const stockChecklistTool = {
   output: OUTPUT,
   async execute(args) {
     check(args, this.parameters)
+    const ticker = args.ticker || getLastTicker()
+
     if (args.action === 'init') {
       if (!args.ticker) throw new Error('init 需要 ticker（股票代码/名称）。')
       const titles = args.items
         ? args.items.split('|').map((t) => t.trim()).filter(Boolean)
         : DEFAULT_CHECKLIST
-      const dd = initDD(args.ticker, args.question || '', titles, args.confirm === 'yes')
+      const dd = initChecklist(args.ticker, args.question || '', titles, args.confirm === 'yes')
       if (dd.conflict) {
-        return result(false, `已有「${dd.ticker}」的尽调清单共 ${dd.items} 项。要覆盖请用 confirm:"yes" 重新 init。`)
+        return result(false, `「${dd.ticker}」已有 ${dd.items} 项清单。要重建请用 confirm:"yes"（旧清单会被覆盖；历史报告与快照保留）。`)
       }
-      return result(true, `「${dd.ticker}」尽调清单已建立（${titles.length} 项）${dd.question ? `，研究问题：${dd.question}` : ''}。每完成一个环节用 status 更新进度。`,
+      return result(true, `「${dd.ticker}」尽调清单已建立（${titles.length} 项）${dd.question ? `，研究问题：${dd.question}` : ''}。每完成一个环节用 status 更新进度；收尾时用 stock_archive 登记报告。`,
         titles.map((t, i) => `${i + 1}. ${t} [todo]`).join('\n'))
     }
+
     if (args.action === 'status') {
+      if (!ticker) return result(false, '还没有任何尽调档案，先 init。')
       if (!args.index) throw new Error('status 需要 index（事项序号）。')
-      const item = updateItem(args.index, { status: args.status, note: args.note })
-      if (!item) return result(false, '还没有尽调清单，先 init。')
-      return result(true, `事项 ${item.index}「${item.title}」→ ${item.status}${item.note ? `（${item.note}）` : ''}。`)
+      const item = updateItem(ticker, args.index, { status: args.status, note: args.note })
+      if (!item) return result(false, `「${ticker}」还没有清单，先 init。`)
+      return result(true, `「${ticker}」事项 ${item.index}「${item.title}」→ ${item.status}${item.note ? `（${item.note}）` : ''}。`)
     }
+
     if (args.action === 'clear') {
       if (args.confirm !== 'yes') return result(false, '清空尽调清单请用 confirm:"yes"。')
-      clearDD()
-      return result(true, '尽调清单已清空。')
+      if (!ticker) return result(false, '没有可清空的清单。')
+      clearChecklist(ticker)
+      return result(true, `「${ticker}」尽调清单已清空（报告与快照保留）。`)
     }
-    // list
-    const dd = getDD()
-    if (!dd.items.length) return result(true, '还没有尽调清单。init 一个即可开始（默认 8 项标准骨架）。')
-    const done = dd.items.filter((it) => it.status === 'done').length
-    return result(true, `「${dd.ticker}」尽调进度：${done}/${dd.items.length} 完成${dd.question ? `（${dd.question}）` : ''}。`,
-      dd.items.map((it) => `${it.index}. ${it.title} [${it.status}]${it.note ? ` ${it.note}` : ''}`).join('\n'))
+
+    // list：给了 ticker 看单只，否则看全部标的
+    if (args.ticker) {
+      const d = getDossier(args.ticker)
+      if (!d || !d.checklist.items.length) return result(false, `「${args.ticker}」没有清单，先 init。`)
+      return result(true, `「${d.ticker}」尽调进度：${d.progress.done}/${d.progress.total} 完成${d.question ? `（${d.question}）` : ''}，报告 ${d.reports} 份。`,
+        d.checklist.items.map((it) => `${it.index}. ${it.title} [${it.status}]${it.note ? ` ${it.note}` : ''}`).join('\n'))
+    }
+    const all = listDossiers()
+    if (!all.length) return result(true, '还没有任何尽调档案。init 一只股票即可开始（默认 8 项标准骨架）。')
+    return result(true, `共 ${all.length} 只标的的尽调档案：`,
+      all.map((d) => `${RATING_MARK[d.rating] || '⚪'} ${d.ticker}${d.name ? ` ${d.name}` : ''} · ${d.progress.done}/${d.progress.total} · ${d.reports} 份报告 · ${String(d.updatedAt).slice(0, 10)}`).join('\n'))
+  },
+}
+
+const RATING_MARK = { green: '🟢', yellow: '🟡', red: '🔴', none: '⚪' }
+
+// ---------------------------------------------------------------------------
+// 工具 1b：stock_archive —— 报告与指标登记（档案库的另一半）
+// ---------------------------------------------------------------------------
+export const stockArchiveTool = {
+  name: 'stock_archive',
+  description:
+    '把尽调报告和关键指标登记进股票档案库，用户在侧栏「投资尽调」里就能看到历史、对比两次结论。' +
+    '一轮尽调收尾（Phase 8）时 save 一次：报告只登记路径、不复制文件；同时存一份当日指标快照，' +
+    '下次再研究同一只股票可 diff 出「估值/评级变了吗」。',
+  parameters: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['action'],
+    properties: {
+      action: str('save 登记报告；list 全部标的；get 单只档案；diff 最近两次快照对比；remove 删某份报告', { enum: ['save', 'list', 'get', 'diff', 'remove'] }),
+      ticker: str('股票代码/名称（save/get/diff/remove 必填；list 省略）'),
+      title: str('save：报告标题'),
+      reportPath: str('save：报告文件的绝对路径（Markdown/HTML/PDF 均可）'),
+      rating: str('save：结论评级', { enum: RATINGS }),
+      metrics: str('save：关键指标 JSON 字符串，如 {"pe":14.4,"marketCap":3.8,"revenue":7517,"netIncome":2248,"fcf":1826}'),
+      note: str('save：一句话结论'),
+      id: str('remove：报告 id（get 里能看到）'),
+    },
+  },
+  output: OUTPUT,
+  async execute(args) {
+    check(args, this.parameters)
+
+    if (args.action === 'list') {
+      const all = listDossiers()
+      if (!all.length) return result(true, '档案库是空的。跑一轮尽调后用 save 登记。')
+      return result(true, `共 ${all.length} 只标的：`,
+        all.map((d) => `${RATING_MARK[d.rating] || '⚪'} ${d.ticker}${d.name ? ` ${d.name}` : ''} · ${d.progress.done}/${d.progress.total} · 报告 ${d.reports} · 更新 ${String(d.updatedAt).slice(0, 10)}`).join('\n'))
+    }
+
+    if (!args.ticker) throw new Error(`${args.action} 需要 ticker。`)
+
+    if (args.action === 'save') {
+      let metrics = {}
+      if (args.metrics) {
+        try { metrics = JSON.parse(args.metrics) } catch { throw new Error('metrics 要是合法 JSON，如 {"pe":14.4}') }
+      }
+      if (args.reportPath && !/^([A-Za-z]:[\\/]|\\\\|\/)/.test(args.reportPath)) throw new Error('reportPath 要用绝对路径。')
+      const { report, meta } = archiveReport(args.ticker, {
+        title: args.title, reportPath: args.reportPath, rating: args.rating, metrics, note: args.note,
+      })
+      const bits = [report.title, report.rating !== 'none' ? `评级 ${RATING_MARK[report.rating]}` : '', Object.keys(report.metrics).length ? `${Object.keys(report.metrics).length} 个指标` : ''].filter(Boolean)
+      return result(true, `已登记「${args.ticker}」：${bits.join(' · ')}（报告 ${meta.reports.length} 份）。用户在侧栏「投资尽调」里能看到并打开报告。`,
+        report.path ? `报告路径：${report.path}` : '')
+    }
+
+    if (args.action === 'get') {
+      const d = getDossier(args.ticker)
+      if (!d) return result(false, `没有「${args.ticker}」的档案。`)
+      const lines = [
+        `${RATING_MARK[d.rating] || '⚪'} ${d.ticker} ${d.name || ''}`.trim(),
+        `进度 ${d.progress.done}/${d.progress.total}${d.question ? ` ｜ 研究问题：${d.question}` : ''}`,
+        ...(d.meta.reports || []).map((r) => `- [${r.id}] ${r.date} ${r.title}${r.rating !== 'none' ? ` ${RATING_MARK[r.rating]}` : ''}${r.path ? ` ${r.path}` : ''}`),
+      ]
+      return result(true, `「${d.ticker}」档案：`, lines.join('\n'))
+    }
+
+    if (args.action === 'diff') {
+      const diff = snapshotDiff(args.ticker)
+      if (!diff.rows.length) return result(false, `「${args.ticker}」只有 ${diff.have} 份快照，至少需要 2 份（不同日期各 save 一次）才能对比。`)
+      const fmt = (v) => (v === null ? '—' : typeof v === 'number' ? String(Math.round(v * 100) / 100) : String(v))
+      return result(true, `「${args.ticker}」${diff.prevDate} → ${diff.nowDate} 指标对比：`,
+        diff.rows.map((r) => `${r.key}：${fmt(r.prev)} → ${fmt(r.now)}${r.delta !== null ? `（${r.delta > 0 ? '+' : ''}${Math.round(r.delta * 100) / 100}）` : ''}`).join('\n'))
+    }
+
+    // remove
+    if (!args.id) throw new Error('remove 需要 id。')
+    const ok = removeReport(args.ticker, args.id)
+    return result(ok, ok ? `已删除「${args.ticker}」的报告 ${args.id}。` : `没找到报告 ${args.id}。`)
   },
 }
 
@@ -161,6 +256,7 @@ export function apply(ctx, config) {
   skillDirsRef.dirs = skillDirs
 
   ctx.effect(() => ctx.tools.register(stockChecklistTool), `${name}: tool checklist`)
+  ctx.effect(() => ctx.tools.register(stockArchiveTool), `${name}: tool archive`)
   ctx.effect(() => ctx.tools.register(stockModuleTool), `${name}: tool modules`)
   ctx.effect(() => ctx.skills.registerProvider(() => createSkillProvider(skillDirs)), `${name}: skills`)
 

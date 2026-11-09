@@ -1,7 +1,7 @@
 {
   "name": "dsh-stock-research",
-  "version": "0.2.0",
-  "description": "股票投资尽调工作台：7 个尽调方法技能 + stock_checklist 尽调清单持久化（8 项标准骨架）+ stock_module 技能查询。侧栏尽调进度面板。",
+  "version": "0.3.0",
+  "description": "股票投资尽调工作台：7 个尽调方法技能 + 每只股票一个独立档案（清单/历史报告/估值快照，互不覆盖）+ stock_checklist & stock_archive 工具。侧栏「投资尽调」研究所页面（概览/尽调列表/报告阅读/发起新尽调）。",
   "license": "MIT",
   "type": "module",
   "main": "src/host.js",
@@ -17,6 +17,7 @@
     "src",
     "dist",
     "lib",
+    "lab",
     "skills",
     "locale/*.json",
     "cordis.patch.yml",
@@ -52,6 +53,7 @@
     "build": "node scripts/build.mjs",
     "test": "node test/lib.test.mjs",
     "selftest": "node scripts/selftest.mjs",
+    "prepare": "npm run build",
     "prepack": "npm run build"
   },
   "dependencies": {

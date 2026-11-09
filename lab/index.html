@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN" data-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投资尽调 · 研究所</title>
+<link rel="stylesheet" href="lab.css">
+</head>
+<body>
+<aside class="rail">
+  <a class="brand" href="#/">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="5"></rect>
+        <path d="M7 15.5l3.2-4 2.6 2.6L17 9"></path>
+        <path d="M14.4 9H17v2.6"></path>
+      </svg>
+    </span>
+    <span class="brand-text"><b>投资尽调</b><small>dsh-stock-research</small></span>
+  </a>
+  <nav class="nav">
+    <div class="nav-group">研究</div>
+    <a href="#/" data-view="home">概览</a>
+    <a href="#/dossiers" data-view="dossiers">我的尽调<span class="count" id="nav-count"></span></a>
+    <a href="#/new" data-view="new">发起新尽调</a>
+    <div class="nav-group">方法</div>
+    <a href="#/method" data-view="method">8 阶段框架</a>
+  </nav>
+  <div class="rail-foot" id="rail-foot"></div>
+</aside>
+
+<main class="main" id="app"><div class="loading">加载中…</div></main>
+
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="报告">
+  <div class="viewer-bar">
+    <span class="viewer-title" id="viewer-title"></span>
+    <a class="ibtn" id="viewer-path" title="报告路径" hidden>路径</a>
+    <button class="ibtn" id="viewer-close" title="关闭（Esc）" aria-label="关闭">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+    </button>
+  </div>
+  <div class="viewer-body" id="viewer-body"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="lab.js"></script>
+</body>
+</html>
