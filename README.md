@@ -3,6 +3,7 @@
 DeepSeek Harness（dsh）插件：**8 阶段投资尽调研究框架**——公司事实底座、行业周期分析、业务拆解、财务质量、股权治理、市场分歧、估值与护城河、综合报告（含信号评级 🟢🟢🟢/🟡🟡🟡/🔴🔴）。
 
 技能来自 [Claude-Code-Stock-Deep-Research-Agent](https://github.com/liangdabiao/Claude-Code-Stock-Deep-Research-Agent)（MIT，liangdabiao）。**纯技能零 API key**——研究由模型在其环境中用网络工具+分析能力完成。
+<img width="1836" height="867" alt="image" src="https://github.com/user-attachments/assets/15e4e0bf-730f-4627-847a-1020850f2430" />
 
 ## 7 个技能
 
